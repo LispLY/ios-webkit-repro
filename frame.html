@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>subframe</title>
+<style>
+  body { font: 14px -apple-system, Arial, sans-serif; margin: 10px; }
+  #fl { white-space: pre-wrap; font: 12px Menlo, monospace; color: #060; margin-top: 8px; }
+  button { font-size: 16px; padding: 12px 18px; border: 0; border-radius: 8px;
+           background: #2563eb; color: #fff; }
+</style>
+</head>
+<body>
+<p>Subframe &mdash; the crash trigger runs in here.</p>
+<button id="go">Trigger window.open + close</button>
+<div id="fl"></div>
+
+<script>
+function fl(m) {
+  var e = document.getElementById('fl');
+  e.textContent += m + "\n";
+  try { parent.postMessage('[iframe] ' + m, '*'); } catch (_) {}
+}
+
+// The actual trigger: open a 1x1 popup and immediately close it, from inside this iframe.
+// This mirrors the real customer app's popup-blocker-detection probe. The popup content
+// (about:blank) is irrelevant to the crash. On iOS 26.5 this races with WebKit page
+// teardown and the render process is terminated ("Can't open this page" sad tab).
+function fire(fromGesture) {
+  fl('window.open(about:blank) ...');
+  var w;
+  try {
+    w = window.open('about:blank', '_blank', 'left=0,top=0,width=1,height=1');
+  } catch (e) {
+    fl('window.open threw: ' + e);
+    return false;
+  }
+  if (!w || w.closed || typeof w.closed === 'undefined') {
+    fl(fromGesture
+        ? 'popup was BLOCKED even with a tap — cannot trigger here'
+        : 'popup BLOCKED on load (no user gesture) — tap the button instead');
+    return false;
+  }
+  fl('popup opened; closing immediately ...');
+  try { w.close(); } catch (e) {}
+  fl('closed. If the tab did NOT crash, tap the button to try again.');
+  return true;
+}
+
+// Attempt 1: fire automatically on load (may be blocked without a user gesture).
+fire(false);
+
+// Attempt 2: fire on a real tap (always passes the popup-blocker gesture requirement).
+document.getElementById('go').addEventListener('click', function () {
+  fl('--- button tap ---');
+  fire(true);
+});
+</script>
+</body>
+</html>
