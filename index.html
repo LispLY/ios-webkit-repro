@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>iOS 26.5 WKWebView crash repro (WebKit 317910)</title>
 <style>
-  body { font: 16px -apple-system, Arial, sans-serif; margin: 20px; line-height: 1.5; }
-  h1 { font-size: 20px; }
+  body { font: 16px -apple-system, Arial, sans-serif; margin: 20px; line-height: 1.55; }
+  h1 { font-size: 21px; }
+  h2 { font-size: 17px; margin-top: 4px; }
   .note { color: #555; font-size: 14px; }
-  iframe { width: 100%; height: 260px; border: 1px solid #ccc; border-radius: 8px; margin-top: 12px; }
-  #log { white-space: pre-wrap; background: #111; color: #0f0; padding: 12px;
-         border-radius: 8px; margin-top: 16px; font: 13px Menlo, monospace; min-height: 48px; }
+  .case { display: block; border: 1px solid #ccc; border-radius: 10px; padding: 16px;
+          margin: 14px 0; text-decoration: none; color: inherit; }
+  .case:active { background: #f0f4ff; }
+  .case .arrow { color: #2563eb; font-weight: 600; }
   code { background: #eee; padding: 1px 5px; border-radius: 4px; }
   a { color: #2563eb; }
 </style>
@@ -22,40 +24,40 @@
   Reproduces Apple WebKit bug
   <a href="https://bugs.webkit.org/show_bug.cgi?id=317910">317910</a>
   ("WebContent process termination due to MESSAGE_CHECK in
-  <code>WebProcessProxy::didPostMessage()</code>"). It affects <b>iOS/iPadOS 26.5 and 26.5.1</b>
-  in any WKWebView-based browser that injects content scripts (e.g. Edge and Chrome for iOS).
-  iOS 26.4.x and earlier are not affected; Safari is not affected; Apple fixed it in a later WebKit.
+  <code>WebProcessProxy::didPostMessage()</code>"). Affects <b>iOS/iPadOS 26.5 and 26.5.1</b>
+  in WKWebView browsers that inject content scripts (Edge, Chrome). iOS 26.4.x and earlier are
+  not affected; Safari is not affected; Apple fixed it in a later WebKit.
 </p>
 
 <p class="note">
-  <b>How to use:</b> open this page in <b>Edge or Chrome for iOS on an iOS 26.5 device</b>.
-  The subframe below tries the trigger automatically on load; if the popup was blocked
-  (no user gesture), tap the button inside the frame. <b>Reproduced</b> = the tab crashes to
-  <b>"Can't open this page"</b> (sad tab). <b>Not reproduced</b> = the frame keeps logging and
-  the tab stays alive.
+  Open each case in <b>Edge or Chrome on an iOS 26.5 device</b>. Each page tries the trigger
+  automatically on load; if the popup was blocked (no user gesture), tap the button on the page.
+  <b>Reproduced</b> = the tab crashes to <b>"Can't open this page"</b> (sad tab).
+  <b>Not reproduced</b> = the page keeps logging and stays alive.
 </p>
+
+<a class="case" href="iframe-case.html">
+  <h2>Case A &mdash; inside an <code>&lt;iframe&gt;</code> <span class="arrow">&rarr;</span></h2>
+  <p class="note" style="margin:6px 0 0">
+    The trigger runs in a subframe: an iframe whose script calls
+    <code>window.open('about:blank')</code> then closes it. This is the minimal known trigger.
+  </p>
+</a>
+
+<a class="case" href="toplevel.html">
+  <h2>Case B &mdash; top-level, no iframe <span class="arrow">&rarr;</span></h2>
+  <p class="note" style="margin:6px 0 0">
+    Mirrors the customer's actual code: a top-level page that on load does a 1&times;1
+    <code>window.open</code> popup-blocker probe, then a second "real document" popup &mdash;
+    <b>no iframe</b>. Tests whether the crash needs an iframe at all.
+  </p>
+</a>
 
 <p class="note">
-  <b>Mechanism:</b> the frame calls <code>window.open('about:blank')</code> and closes it
-  immediately. On iOS 26.5 this races with WebKit's page teardown; a benign content-script
-  <code>postMessage</code> in flight fails an over-strict UI-process check and WebKit terminates
-  the render process. The popup content is irrelevant &mdash; no PDF, redirect, or SSO is needed.
+  <b>Why two cases:</b> the confirmed WebKit bug reproduces with an iframe (Case A). The customer's
+  pasted code is a top-level probe with no iframe (Case B). Comparing the two on a real device
+  shows whether the iframe is required, or whether the customer's top-level sequence triggers the
+  same crash &mdash; i.e. whether this repro represents the customer's actual scenario.
 </p>
-
-<iframe src="frame.html" title="crash trigger subframe"></iframe>
-<div id="log">waiting for subframe…</div>
-
-<script>
-// Surface the iframe's progress in the top page too, so the log survives if the frame is torn down.
-window.addEventListener('message', function (e) {
-  if (typeof e.data === 'string' && e.data.indexOf('[iframe]') === 0) {
-    var d = document.getElementById('log');
-    if (d.textContent === 'waiting for subframe…') d.textContent = '';
-    d.textContent += e.data + "\n";
-  }
-});
-</script>
 </body>
 </html>
-
-<!-- repro deploy build -->

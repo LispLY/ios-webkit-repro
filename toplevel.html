@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Case B — top-level 1px window.open (matches customer code)</title>
+<style>
+  body { font: 16px -apple-system, Arial, sans-serif; margin: 20px; line-height: 1.5; }
+  h1 { font-size: 20px; }
+  .note { color: #555; font-size: 14px; }
+  button { font-size: 18px; padding: 14px 22px; border: 0; border-radius: 8px;
+           background: #2563eb; color: #fff; margin: 8px 0; }
+  #log { white-space: pre-wrap; background: #111; color: #0f0; padding: 12px;
+         border-radius: 8px; margin-top: 16px; font: 13px Menlo, monospace; min-height: 60px; }
+  code { background: #eee; padding: 1px 5px; border-radius: 4px; }
+  a { color: #2563eb; }
+</style>
+</head>
+<body>
+<h1>Case B — top-level 1px <code>window.open</code> (no iframe)</h1>
+<p class="note"><a href="./">&larr; back to index</a></p>
+
+<p class="note">
+  This mirrors the customer's actual code structure: a top-level page that, on load, runs a
+  popup-blocker <b>detection</b> routine which does a 1&times;1
+  <code>window.open</code> &mdash; and then opens the real document in a second
+  <code>window.open</code>. <b>There is no <code>&lt;iframe&gt;</code> here.</b>
+</p>
+<p class="note">
+  Purpose: test whether the crash needs an iframe at all, or whether the customer's
+  top-level "1px probe + real popup" sequence is enough on its own.
+</p>
+
+<button id="go">Run again (real tap)</button>
+<div id="log">running detection on load…</div>
+
+<script>
+function log(m) {
+  var d = document.getElementById('log');
+  if (d.textContent === 'running detection on load…') d.textContent = '';
+  d.textContent += m + "\n";
+}
+
+// Mirrors the customer's arePopupsBlocked(): open a 1x1 throwaway window to test whether
+// popups are blocked. Customer runs this on body onload (no user gesture).
+function arePopupsBlocked() {
+  var t;
+  try {
+    t = window.open('about:blank', '_blank', 'left=0,top=0,width=1,height=1');
+  } catch (e) {
+    log('1px probe threw: ' + e);
+    return true;
+  }
+  if (!t || t.closed || typeof t.closed === 'undefined') {
+    log('1px probe: popups BLOCKED (window is null/closed)');
+    return true;
+  }
+  log('1px probe: popups allowed; closing throwaway window');
+  try { t.close(); } catch (e) {}
+  return false;
+}
+
+// Mirrors the customer's flow: detection probe, then (if allowed) the "real" document popup.
+function customerFlow(fromGesture) {
+  log(fromGesture ? '--- real tap ---' : '--- on load (no gesture) ---');
+  var blocked = arePopupsBlocked();
+  if (blocked) {
+    log('detection says blocked — customer would alert() here; real popup not attempted');
+    return;
+  }
+  // The "real document" popup — second window.open in quick succession, like the PDF tab.
+  log('opening the "real document" popup (about:blank stand-in) ...');
+  var w = window.open('about:blank', '_blank');
+  if (!w || w.closed) { log('real popup blocked/null'); return; }
+  log('real popup opened. If the tab did NOT crash, tap the button to retry.');
+}
+
+// Attempt on load (no gesture) — like the customer's body onload.
+customerFlow(false);
+
+// Retry on a real tap (passes the popup-blocker gesture requirement).
+document.getElementById('go').addEventListener('click', function () {
+  customerFlow(true);
+});
+</script>
+</body>
+</html>
